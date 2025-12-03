@@ -1,8 +1,18 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, onMounted, watch } from 'vue';
-import { ChevronRightIcon, ChevronLeftIcon, XMarkIcon } from '@heroicons/vue/24/solid';
+import { 
+    ChevronRightIcon, 
+    ChevronLeftIcon, 
+    XMarkIcon, 
+    UserIcon, 
+    PhoneIcon, 
+    IdentificationIcon 
+} from '@heroicons/vue/24/solid';
 
+// ==========================================
+// 1. DATA & STATE
+// ==========================================
 const props = defineProps({
     kavlings: Array,
     canLogin: Boolean,
@@ -11,6 +21,15 @@ const props = defineProps({
 const selectedKavling = ref(null);
 const currentSlide = ref(0);
 const isPanelOpen = ref(true);
+const showBookingModal = ref(false); // State Modal
+
+// Form Booking (Data yang akan dikirim ke Backend Xendit)
+const bookingForm = useForm({
+    nama_pembeli: '',
+    nomor_wa: '',
+    nik_ktp: '',
+    kavling_id: null,
+});
 
 const formatRupiah = (number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -24,12 +43,40 @@ const togglePanel = () => {
     isPanelOpen.value = !isPanelOpen.value;
 };
 
+// ==========================================
+// 2. LOGIKA INTERAKSI & BOOKING (FIXED)
+// ==========================================
 watch(selectedKavling, (newVal) => {
     if (newVal) {
         isPanelOpen.value = true;
         currentSlide.value = 0;
     }
 });
+
+// Buka Modal & Set ID Kavling
+const openBookingModal = () => {
+    if (!selectedKavling.value) return;
+    bookingForm.kavling_id = selectedKavling.value.id;
+    showBookingModal.value = true;
+};
+
+// KIRIM KE BACKEND (XENDIT)
+const submitBooking = () => {
+    bookingForm.post(route('booking.store'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            // Kalau sukses, biasanya Backend langsung redirect ke Xendit (Inertia::location)
+            // Tapi kalau masih di halaman ini:
+            showBookingModal.value = false;
+            bookingForm.reset();
+            alert('Mengarahkan ke pembayaran...');
+        },
+        onError: (errors) => {
+            alert('Gagal memproses booking. Harap lengkapi data.');
+            console.error(errors);
+        }
+    });
+};
 
 const nextSlide = () => {
     if (!selectedKavling.value?.galleries) return;
@@ -43,6 +90,9 @@ const prevSlide = () => {
     else currentSlide.value--;
 };
 
+// ==========================================
+// 3. LOGIKA PETA (WARNA & KLIK)
+// ==========================================
 const colorizeMap = () => {
     props.kavlings.forEach(kavling => {
         const element = document.getElementById(kavling.kode_kavling);
@@ -60,11 +110,11 @@ const colorizeMap = () => {
 };
 
 const handleMapClick = (event) => {
-    // Target bisa berupa Path atau Text, jadi kita cari parent Group-nya
+    // Deteksi klik pada Group (Path + Text)
     const targetGroup = event.target.closest('.lot-group');
     if (!targetGroup) return;
 
-    // Ambil elemen Path di dalam grup itu untuk dapat ID-nya
+    // Ambil ID dari Path di dalam grup
     const pathElement = targetGroup.querySelector('.lot');
     const targetId = pathElement ? pathElement.id : null;
 
@@ -79,7 +129,7 @@ const handleMapClick = (event) => {
         }
         selectedKavling.value = found;
         
-        // Highlight Atapnya
+        // Highlight Atap
         pathElement.style.fill = 'url(#roofSelected)'; 
     }
 };
@@ -90,54 +140,29 @@ const updateColorSingle = (kavling, element) => {
     else element.style.fill = 'url(#roofAvailable)';
 };
 
-// ... kode sebelumnya ...
-
-// LOGIKA HUBUNGI MARKETING (WHATSAPP)
-const contactMarketing = () => {
-    if (!selectedKavling.value) return;
-
-    // 1. Nomor HP Marketing (Ganti dengan nomor aslimu, format 628...)
-    const phoneNumber = '6283841742172'; 
-
-    // 2. Susun Pesan Otomatis (Biar Admin tau user nanya kavling mana)
-    const message = `Halo Admin Tiaramu Greenland,
-Saya tertarik dengan unit:
-🏠 *Blok ${selectedKavling.value.kode_kavling}*
-📐 Tipe: ${selectedKavling.value.tipe_rumah}
-💰 Harga: ${formatRupiah(selectedKavling.value.harga)}
-
-Mohon info ketersediaan dan promo terbarunya. Terima kasih.`;
-
-    // 3. Buat Link WA API
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-
-    // 4. Buka di Tab Baru
-    window.open(whatsappUrl, '_blank');
-};
-
-// ... kode onMounted ...
+// Pantau perubahan data (Realtime Update)
+watch(() => props.kavlings, () => {
+    colorizeMap();
+}, { deep: true });
 
 onMounted(() => {
     colorizeMap();
 });
-
-
 </script>
 
 <template>
-    <Head title="Tiaramu Greenland - Premium 3D" />
+    <Head title="Tiaramu Greenland - Premium Estate" />
 
     <div class="relative h-screen w-screen overflow-hidden bg-slate-50 font-sans text-slate-900">
         
         <div class="absolute top-[-300px] left-[-300px] w-[1200px] h-[1200px] bg-gradient-to-br from-orange-200/40 via-amber-100/10 to-transparent rounded-full blur-3xl pointer-events-none z-10 mix-blend-screen"></div>
-
         <div class="absolute inset-0 z-20 pointer-events-none overflow-hidden">
             <svg class="w-full h-full opacity-70">
                 <defs><filter id="softEdge"><feGaussianBlur in="SourceGraphic" stdDeviation="6" /></filter></defs>
-                <g class="cloud-move-1" filter="url(#softEdge)" fill="white" opacity="0.6">
+                <g class="cloud-move-1" filter="url(#softEdge)" fill="white" opacity="0.5">
                     <path d="M100,100 Q120,60 160,70 Q190,40 230,70 Q270,50 300,90 Q330,90 330,120 Q330,150 290,150 L120,150 Q90,150 90,120 Q90,100 100,100 Z" transform="scale(1.5)" />
                 </g>
-                <g class="cloud-move-2" filter="url(#softEdge)" fill="white" opacity="0.4">
+                <g class="cloud-move-2" filter="url(#softEdge)" fill="white" opacity="0.3">
                     <path d="M50,50 Q70,20 100,30 Q120,10 150,30 Q180,30 180,60 Q180,80 150,80 L70,80 Q50,80 50,60 Z" transform="translate(0, 400) scale(1.2)" />
                 </g>
             </svg>
@@ -147,56 +172,28 @@ onMounted(() => {
             <div class="transform scale-90 md:scale-100 lg:scale-110 transition-transform duration-700 ease-out relative z-0">
                 
                 <svg @click="handleMapClick" class="premium-map drop-shadow-2xl" version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="-50 -250 950 950" width="950" height="950">
+                    
                     <defs>
                         <pattern id="asphalt" x="0" y="0" width="128" height="128" patternUnits="userSpaceOnUse">
                             <rect width="128" height="128" fill="#1e293b"/>
                             <filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/></filter>
                             <rect width="128" height="128" fill="white" opacity="0.15" filter="url(#noiseFilter)"/>
                         </pattern>
-
-                        <linearGradient id="roofAvailable" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#ffffff" /> <stop offset="100%" stop-color="#cbd5e1" />
-                        </linearGradient>
-                        <linearGradient id="roofSold" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#f87171" /> <stop offset="100%" stop-color="#991b1b" /> 
-                        </linearGradient>
-                        <linearGradient id="roofBooking" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#fcd34d" /> <stop offset="100%" stop-color="#b45309" /> 
-                        </linearGradient>
-                        <linearGradient id="roofSelected" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#60a5fa" /> <stop offset="100%" stop-color="#1e40af" /> 
-                        </linearGradient>
-                        
-                        <radialGradient id="treeGradient" cx="30%" cy="30%" r="70%" fx="30%" fy="30%">
-                            <stop offset="0%" stop-color="#4ade80" /> <stop offset="100%" stop-color="#14532d" />
-                        </radialGradient>
-
-                        <filter id="roadShadow">
-                            <feGaussianBlur in="SourceAlpha" stdDeviation="2"/> <feOffset dx="0" dy="2"/>
-                            <feComponentTransfer><feFuncA type="linear" slope="0.4"/></feComponentTransfer>
-                            <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-                        </filter>
-                        <filter id="houseShadow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feGaussianBlur in="SourceAlpha" stdDeviation="5"/> <feOffset dx="5" dy="8"/>
-                            <feComponentTransfer><feFuncA type="linear" slope="0.3"/></feComponentTransfer>
-                            <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-                        </filter>
+                        <linearGradient id="roofAvailable" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ffffff" /> <stop offset="100%" stop-color="#cbd5e1" /></linearGradient>
+                        <linearGradient id="roofSold" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f87171" /> <stop offset="100%" stop-color="#991b1b" /></linearGradient>
+                        <linearGradient id="roofBooking" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fcd34d" /> <stop offset="100%" stop-color="#b45309" /></linearGradient>
+                        <linearGradient id="roofSelected" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#60a5fa" /> <stop offset="100%" stop-color="#1e40af" /></linearGradient>
+                        <radialGradient id="treeGradient" cx="30%" cy="30%" r="70%" fx="30%" fy="30%"><stop offset="0%" stop-color="#4ade80" /> <stop offset="100%" stop-color="#14532d" /></radialGradient>
+                        <filter id="roadShadow"><feGaussianBlur in="SourceAlpha" stdDeviation="2"/> <feOffset dx="0" dy="2"/><feComponentTransfer><feFuncA type="linear" slope="0.4"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                        <filter id="houseShadow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur in="SourceAlpha" stdDeviation="5"/> <feOffset dx="5" dy="8"/><feComponentTransfer><feFuncA type="linear" slope="0.3"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
                     </defs>
 
                     <g class="roads-layer" filter="url(#roadShadow)">
                         <g class="curb" fill="#94a3b8" stroke="#94a3b8" stroke-width="25" stroke-linecap="round" stroke-linejoin="round">
-                            <path id="ROW4" d="m323.19 50.14l-18.45 195.13-14.93-1.41 18.45-195.13z"/>
-                            <path id="ROW4-2" d="m344.19 56.14l-18.45 195.13-14.93-1.41 18.45-195.13z"/>
-                            <path id="ROW5" d="m456.62 245.17l-2.51 19.84-159.73-20.18 2.51-19.84z"/>
-                            <path id="ROW5-2" d="m450.7 258.21l-11.48 121.46-19.92-1.88 11.48-121.46z"/>
-                            <path id="ROW6" d="m470.38 88.48l-14.87 157.3-23.89-2.26 14.87-157.3z"/>
+                            <path d="m323.19 50.14l-18.45 195.13-14.93-1.41 18.45-195.13z"/><path d="m344.19 56.14l-18.45 195.13-14.93-1.41 18.45-195.13z"/><path d="m456.62 245.17l-2.51 19.84-159.73-20.18 2.51-19.84z"/><path d="m450.7 258.21l-11.48 121.46-19.92-1.88 11.48-121.46z"/><path d="m470.38 88.48l-14.87 157.3-23.89-2.26 14.87-157.3z"/>
                         </g>
                         <g class="asphalt" fill="url(#asphalt)" stroke="url(#asphalt)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round">
-                            <path id="ROW4" d="m323.19 50.14l-18.45 195.13-14.93-1.41 18.45-195.13z"/>
-                            <path id="ROW4-2" d="m344.19 56.14l-18.45 195.13-14.93-1.41 18.45-195.13z"/>
-                            <path id="ROW5" d="m456.62 245.17l-2.51 19.84-159.73-20.18 2.51-19.84z"/>
-                            <path id="ROW5-2" d="m450.7 258.21l-11.48 121.46-19.92-1.88 11.48-121.46z"/>
-                            <path id="ROW6" d="m470.38 88.48l-14.87 157.3-23.89-2.26 14.87-157.3z"/>
+                            <path d="m323.19 50.14l-18.45 195.13-14.93-1.41 18.45-195.13z"/><path d="m344.19 56.14l-18.45 195.13-14.93-1.41 18.45-195.13z"/><path d="m456.62 245.17l-2.51 19.84-159.73-20.18 2.51-19.84z"/><path d="m450.7 258.21l-11.48 121.46-19.92-1.88 11.48-121.46z"/><path d="m470.38 88.48l-14.87 157.3-23.89-2.26 14.87-157.3z"/>
                         </g>
                         <g class="markings" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="15,15" opacity="0.6">
                              <path d="M315 50 L290 240 L440 250" /> <path d="M460 90 L445 250" /> <path d="M435 270 L425 380" />
@@ -204,14 +201,10 @@ onMounted(() => {
                     </g>
 
                     <g class="trees" fill="url(#treeGradient)" filter="url(#houseShadow)">
-                        <circle cx="280" cy="80" r="18" /> <circle cx="270" cy="100" r="14" />
-                        <circle cx="530" cy="200" r="22" /> <circle cx="550" cy="220" r="16" />
-                        <circle cx="540" cy="300" r="18" /> <circle cx="350" cy="30" r="16" />
-                        <circle cx="410" cy="220" r="12" />
+                        <circle cx="280" cy="80" r="18" /> <circle cx="270" cy="100" r="14" /> <circle cx="530" cy="200" r="22" /> <circle cx="550" cy="220" r="16" /> <circle cx="540" cy="300" r="18" /> <circle cx="350" cy="30" r="16" /> <circle cx="410" cy="220" r="12" />
                     </g>
 
                     <g class="lots-layer" filter="url(#houseShadow)" stroke="#ffffff" stroke-width="2" stroke-linejoin="round">
-                        
                         <g class="lot-group"> <path id="A7" class="lot" d="m306.12 49.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="280" y="62" class="lot-label">A7</text> </g>
                         <g class="lot-group"> <path id="A6" class="lot" d="m304.12 76.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="278" y="89" class="lot-label">A6</text> </g>
                         <g class="lot-group"> <path id="A5" class="lot" d="m300.12 102.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="274" y="115" class="lot-label">A5</text> </g>
@@ -251,7 +244,6 @@ onMounted(() => {
                         <g class="lot-group"> <path id="D2" class="lot" d="m491.12 337.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="467" y="350" class="lot-label">D2</text> </g>
                         <g class="lot-group"> <path id="D1" class="lot" d="m488.12 362.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="464" y="375" class="lot-label">D1</text> </g>
                     </g>
-
                 </svg>
             </div>
         </div>
@@ -297,14 +289,37 @@ onMounted(() => {
                             <div class="bg-white p-6 rounded-3xl border border-slate-100 text-center hover:border-emerald-300 hover:shadow-xl hover:shadow-emerald-100/50 transition group cursor-default"><span class="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 group-hover:text-emerald-500 transition">Luas Bangunan</span><span class="text-3xl font-black text-slate-700">{{ selectedKavling.luas_bangunan }} <span class="text-sm font-bold text-slate-400">m²</span></span></div>
                         </div>
                         <div class="mb-8 p-8 bg-gradient-to-br from-emerald-50 to-white rounded-3xl border border-emerald-100 relative overflow-hidden"><div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-emerald-100 rounded-full blur-2xl opacity-50"></div><span class="block text-emerald-600/80 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Harga Cash Keras</span><div class="text-4xl font-black text-emerald-800 relative z-10 tracking-tight">{{ formatRupiah(selectedKavling.harga) }}</div></div>
-                        <button v-if="selectedKavling.status === 'available'" @click="contactMarketing" class="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-lg shadow-2xl shadow-emerald-300/50 transition transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3"><span>📞</span> Hubungi Marketing</button>
-                         <button v-else disabled class="w-full py-5 bg-slate-100 text-slate-400 rounded-2xl font-bold text-lg cursor-not-allowed border-2 border-slate-200">🔒 Unit Tidak Tersedia</button>
+                        
+                        <button v-if="selectedKavling.status === 'available'" @click="openBookingModal" class="w-full py-5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-lg shadow-2xl shadow-emerald-300/50 transition transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3"><span>💎</span> Booking Unit Sekarang</button>
+                        <button v-else disabled class="w-full py-5 bg-slate-100 text-slate-400 rounded-2xl font-bold text-lg cursor-not-allowed border-2 border-slate-200">🔒 Unit Tidak Tersedia</button>
                     </div>
                     <div v-else class="text-center py-24 opacity-30"><p class="text-xl font-bold text-slate-400">Pilih unit pada peta.</p></div>
                 </div>
                 <div class="p-8 text-center text-[10px] font-bold text-slate-300 border-t border-slate-100 mt-auto bg-slate-50 uppercase tracking-widest">&copy; 2025 Tiaramu Greenland.</div>
             </div>
         </div>
+
+        <Transition name="modal">
+            <div v-if="showBookingModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-md" @click="showBookingModal = false"></div>
+                <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden transform transition-all">
+                    <div class="bg-gradient-to-r from-emerald-600 to-teal-600 p-6 text-white flex justify-between items-start">
+                        <div><h3 class="text-xl font-black">Formulir Pemesanan</h3><p class="text-emerald-100 text-sm mt-1">Lengkapi data untuk mengunci unit.</p></div>
+                        <button @click="showBookingModal = false" class="bg-white/20 hover:bg-white/40 rounded-full p-1 transition"><XMarkIcon class="w-6 h-6" /></button>
+                    </div>
+                    <div class="p-8 space-y-5">
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-4">
+                            <div class="h-12 w-12 bg-white rounded-lg flex items-center justify-center font-black text-xl shadow-sm text-slate-700 border border-slate-200">{{ selectedKavling?.kode_kavling }}</div>
+                            <div><p class="text-xs font-bold text-slate-400 uppercase">Unit Pilihan</p><p class="text-emerald-600 font-bold">{{ formatRupiah(selectedKavling?.harga) }}</p></div>
+                        </div>
+                        <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Nama Lengkap</label><div class="relative"><UserIcon class="w-5 h-5 absolute left-3 top-3 text-slate-400" /><input v-model="bookingForm.nama_pembeli" type="text" class="w-full pl-10 py-3 bg-slate-50 border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 font-medium" placeholder="Cth: Budi Santoso"></div></div>
+                        <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Nomor WhatsApp</label><div class="relative"><PhoneIcon class="w-5 h-5 absolute left-3 top-3 text-slate-400" /><input v-model="bookingForm.nomor_wa" type="text" class="w-full pl-10 py-3 bg-slate-50 border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 font-medium" placeholder="0812..."></div></div>
+                        <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">NIK KTP (Opsional)</label><div class="relative"><IdentificationIcon class="w-5 h-5 absolute left-3 top-3 text-slate-400" /><input v-model="bookingForm.nik_ktp" type="text" class="w-full pl-10 py-3 bg-slate-50 border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 font-medium" placeholder="16 digit NIK"></div></div>
+                        <button @click="submitBooking" class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-emerald-200 transition transform hover:-translate-y-1 active:scale-95 mt-4">Lanjut Pembayaran 💳</button>
+                    </div>
+                </div>
+            </div>
+        </Transition>
 
         <div class="fixed bottom-10 left-10 bg-white/80 backdrop-blur-xl p-6 rounded-3xl shadow-2xl border border-white/60 z-30 hidden sm:block hover:scale-105 transition duration-300">
             <h3 class="font-bold text-[10px] text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-200 pb-3">Status Unit</h3>
@@ -321,12 +336,14 @@ onMounted(() => {
 <style>
 .bg-premium-dots { background-color: #f1f5f9; background-image: radial-gradient(#94a3b8 1px, transparent 1px); background-size: 30px 30px; }
 .lot { fill: url(#roofAvailable); transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); cursor: pointer; }
-.lot-label { font-family: sans-serif; font-size: 10px; font-weight: 900; fill: #334155; text-anchor: middle; dominant-baseline: middle; pointer-events: none; opacity: 0.8; }
+.lot-label { font-family: sans-serif; font-size: 10px; font-weight: 900; fill: #334155; text-anchor: middle; dominant-baseline: middle; pointer-events: none; opacity: 0.8; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .lot-group:hover .lot { transform: translateY(-6px) scale(1.02); z-index: 50; filter: drop-shadow(0 20px 10px rgba(0,0,0,0.15)); }
 .lot-group:hover .lot-label { transform: translateY(-6px) scale(1.02); }
-.lot-group .lot, .lot-group .lot-label { transform-origin: center; transform-box: fill-box; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.lot-group .lot, .lot-group .lot-label { transform-origin: center; transform-box: fill-box; }
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .animate-fade-in-up { animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.modal-enter-active, .modal-leave-active { transition: all 0.3s ease; }
+.modal-enter-from, .modal-leave-to { opacity: 0; transform: scale(0.9); }
 @keyframes floatCloud1 { 0% { transform: translateX(0px); } 100% { transform: translateX(120vw); } }
 .cloud-move-1 { animation: floatCloud1 60s linear infinite; }
 @keyframes floatCloud2 { 0% { transform: translateX(0px); } 100% { transform: translateX(100vw); } }

@@ -11,14 +11,37 @@ use Inertia\Inertia;
 class AdminKavlingController extends Controller
 {
     // 1. HALAMAN INDEX: Menampilkan daftar semua kavling
-    public function index()
+    public function index(Request $request)
     {
-        $kavlings = Kavling::orderBy('blok', 'asc')
-                           ->orderBy('nomor', 'asc')
-                           ->get();
+        // 1. Tangkap input pencarian & filter dari Vue
+        $search = $request->input('search');
+        $filterStatus = $request->input('status');
 
+        // 2. Query Dasar
+        $query = Kavling::with('galleries')
+            ->orderBy('blok', 'asc')
+            ->orderBy('nomor', 'asc');
+
+        // 3. Logika Pencarian (Jika ada ketikan)
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('kode_kavling', 'like', "%{$search}%")
+                  ->orWhere('tipe_rumah', 'like', "%{$search}%");
+            });
+        }
+
+        // 4. Logika Filter Status (Jika ada pilihan)
+        if ($filterStatus && $filterStatus !== 'all') {
+            $query->where('status', $filterStatus);
+        }
+
+        // 5. Eksekusi (Get Data)
+        $kavlings = $query->get();
+
+        // 6. Kirim balik ke Vue (Sertakan filters biar inputnya gak ilang pas reload)
         return Inertia::render('Admin/Kavling/Index', [
-            'kavlings' => $kavlings
+            'kavlings' => $kavlings,
+            'filters' => $request->only(['search', 'status']), // Kirim balik state filter
         ]);
     }
 
