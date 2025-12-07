@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Booking;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-
+use Barryvdh\DomPDF\Facade\Pdf;
 class AdminBookingController extends Controller
 {
     public function index()
@@ -45,5 +45,21 @@ class AdminBookingController extends Controller
         $booking->kavling->update(['status' => 'sold']);
 
         return back();
+    }
+    public function exportPdf()
+    {
+        // Ambil semua data (bisa difilter status PAID saja kalau mau)
+        $bookings = Booking::with('kavling')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Load View Blade yang tadi kita buat
+        $pdf = Pdf::loadView('pdf.laporan_transaksi', [
+            'bookings' => $bookings
+        ]);
+
+        // Stream (Tampilkan di browser) atau Download (Unduh langsung)
+        // Kita pilih Stream biar admin bisa preview dulu
+        return $pdf->stream('Laporan-Penjualan-Tiaramu.pdf');
     }
 }

@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ref, onMounted, watch } from 'vue';
 import { 
     ChevronRightIcon, 
@@ -21,9 +21,8 @@ const props = defineProps({
 const selectedKavling = ref(null);
 const currentSlide = ref(0);
 const isPanelOpen = ref(true);
-const showBookingModal = ref(false); // State Modal
+const showBookingModal = ref(false);
 
-// Form Booking (Data yang akan dikirim ke Backend Xendit)
 const bookingForm = useForm({
     nama_pembeli: '',
     nomor_wa: '',
@@ -43,9 +42,6 @@ const togglePanel = () => {
     isPanelOpen.value = !isPanelOpen.value;
 };
 
-// ==========================================
-// 2. LOGIKA INTERAKSI & BOOKING (FIXED)
-// ==========================================
 watch(selectedKavling, (newVal) => {
     if (newVal) {
         isPanelOpen.value = true;
@@ -53,27 +49,33 @@ watch(selectedKavling, (newVal) => {
     }
 });
 
-// Buka Modal & Set ID Kavling
 const openBookingModal = () => {
+    const user = usePage().props.auth.user;
+    
+    if (!user) {
+        if(confirm('Silakan Login untuk melakukan Booking.')) {
+             window.location.href = route('login');
+        }
+        return;
+    }
+
     if (!selectedKavling.value) return;
+    
+    bookingForm.nama_pembeli = user.name;
     bookingForm.kavling_id = selectedKavling.value.id;
     showBookingModal.value = true;
 };
 
-// KIRIM KE BACKEND (XENDIT)
 const submitBooking = () => {
     bookingForm.post(route('booking.store'), {
         preserveScroll: true,
         onSuccess: () => {
-            // Kalau sukses, biasanya Backend langsung redirect ke Xendit (Inertia::location)
-            // Tapi kalau masih di halaman ini:
             showBookingModal.value = false;
             bookingForm.reset();
             alert('Mengarahkan ke pembayaran...');
         },
         onError: (errors) => {
-            alert('Gagal memproses booking. Harap lengkapi data.');
-            console.error(errors);
+            alert('Gagal booking. Cek kelengkapan data.');
         }
     });
 };
@@ -90,9 +92,6 @@ const prevSlide = () => {
     else currentSlide.value--;
 };
 
-// ==========================================
-// 3. LOGIKA PETA (WARNA & KLIK)
-// ==========================================
 const colorizeMap = () => {
     props.kavlings.forEach(kavling => {
         const element = document.getElementById(kavling.kode_kavling);
@@ -110,11 +109,9 @@ const colorizeMap = () => {
 };
 
 const handleMapClick = (event) => {
-    // Deteksi klik pada Group (Path + Text)
     const targetGroup = event.target.closest('.lot-group');
     if (!targetGroup) return;
 
-    // Ambil ID dari Path di dalam grup
     const pathElement = targetGroup.querySelector('.lot');
     const targetId = pathElement ? pathElement.id : null;
 
@@ -128,8 +125,6 @@ const handleMapClick = (event) => {
             if (prevEl) updateColorSingle(selectedKavling.value, prevEl);
         }
         selectedKavling.value = found;
-        
-        // Highlight Atap
         pathElement.style.fill = 'url(#roofSelected)'; 
     }
 };
@@ -140,7 +135,6 @@ const updateColorSingle = (kavling, element) => {
     else element.style.fill = 'url(#roofAvailable)';
 };
 
-// Pantau perubahan data (Realtime Update)
 watch(() => props.kavlings, () => {
     colorizeMap();
 }, { deep: true });
@@ -170,9 +164,7 @@ onMounted(() => {
 
         <div class="absolute inset-0 z-0 flex items-center justify-center overflow-auto p-4 md:p-10 cursor-move bg-premium-dots">
             <div class="transform scale-90 md:scale-100 lg:scale-110 transition-transform duration-700 ease-out relative z-0">
-                
                 <svg @click="handleMapClick" class="premium-map drop-shadow-2xl" version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="-50 -250 950 950" width="950" height="950">
-                    
                     <defs>
                         <pattern id="asphalt" x="0" y="0" width="128" height="128" patternUnits="userSpaceOnUse">
                             <rect width="128" height="128" fill="#1e293b"/>
@@ -205,6 +197,7 @@ onMounted(() => {
                     </g>
 
                     <g class="lots-layer" filter="url(#houseShadow)" stroke="#ffffff" stroke-width="2" stroke-linejoin="round">
+                        
                         <g class="lot-group"> <path id="A7" class="lot" d="m306.12 49.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="280" y="62" class="lot-label">A7</text> </g>
                         <g class="lot-group"> <path id="A6" class="lot" d="m304.12 76.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="278" y="89" class="lot-label">A6</text> </g>
                         <g class="lot-group"> <path id="A5" class="lot" d="m300.12 102.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="274" y="115" class="lot-label">A5</text> </g>
@@ -255,8 +248,28 @@ onMounted(() => {
                     <div><h1 class="font-bold text-emerald-900 leading-none">Tiaramu Greenland</h1><p class="text-[10px] text-emerald-600 font-extrabold tracking-widest uppercase">Premium Estate</p></div>
                 </div>
                 <div v-if="canLogin">
-                    <Link v-if="$page.props.auth.user" :href="route('dashboard')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-full text-sm font-bold shadow-lg transition transform hover:scale-105">Dashboard</Link>
-                    <Link v-else :href="route('login')" class="bg-white/80 backdrop-blur-xl hover:bg-white text-emerald-800 px-6 py-2 rounded-full text-sm font-bold shadow-lg transition border border-white/40">Admin Login</Link>
+                    
+                    <div v-if="$page.props.auth.user" class="flex items-center gap-2">
+                        <Link :href="route('profile.edit')" class="group flex items-center gap-3 bg-white/90 backdrop-blur-xl pl-2 pr-5 py-2 rounded-full shadow-lg border border-white/50 hover:scale-105 hover:shadow-emerald-200/50 transition-all duration-300">
+                            
+                            <img 
+                                :src="$page.props.auth.user.avatar || 'https://ui-avatars.com/api/?background=10b981&color=fff&name=' + $page.props.auth.user.name" 
+                                class="w-10 h-10 rounded-full border-2 border-emerald-100 shadow-sm object-cover"
+                            />
+                            
+                            <div class="text-left leading-tight">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-emerald-500 transition">Halo,</p>
+                                <p class="text-sm font-black text-slate-700 group-hover:text-emerald-700 transition">
+                                    {{ $page.props.auth.user.name.split(' ')[0] }} </p>
+                            </div>
+                        </Link>
+                    </div>
+
+                    <Link v-else :href="route('login')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-full text-sm font-bold shadow-lg shadow-emerald-200 transition transform hover:scale-105 flex items-center gap-2">
+                        <UserIcon class="w-4 h-4"/>
+                        Masuk / Daftar
+                    </Link>
+
                 </div>
             </div>
         </div>
@@ -295,7 +308,6 @@ onMounted(() => {
                     </div>
                     <div v-else class="text-center py-24 opacity-30"><p class="text-xl font-bold text-slate-400">Pilih unit pada peta.</p></div>
                 </div>
-                <div class="p-8 text-center text-[10px] font-bold text-slate-300 border-t border-slate-100 mt-auto bg-slate-50 uppercase tracking-widest">&copy; 2025 Tiaramu Greenland.</div>
             </div>
         </div>
 
@@ -336,10 +348,10 @@ onMounted(() => {
 <style>
 .bg-premium-dots { background-color: #f1f5f9; background-image: radial-gradient(#94a3b8 1px, transparent 1px); background-size: 30px 30px; }
 .lot { fill: url(#roofAvailable); transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); cursor: pointer; }
-.lot-label { font-family: sans-serif; font-size: 10px; font-weight: 900; fill: #334155; text-anchor: middle; dominant-baseline: middle; pointer-events: none; opacity: 0.8; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.lot-label { font-family: sans-serif; font-size: 10px; font-weight: 900; fill: #000000; stroke: none !important; text-anchor: middle; dominant-baseline: middle; pointer-events: none; opacity: 1; }
 .lot-group:hover .lot { transform: translateY(-6px) scale(1.02); z-index: 50; filter: drop-shadow(0 20px 10px rgba(0,0,0,0.15)); }
 .lot-group:hover .lot-label { transform: translateY(-6px) scale(1.02); }
-.lot-group .lot, .lot-group .lot-label { transform-origin: center; transform-box: fill-box; }
+.lot-group .lot, .lot-group .lot-label { transform-origin: center; transform-box: fill-box; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .animate-fade-in-up { animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .modal-enter-active, .modal-leave-active { transition: all 0.3s ease; }

@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { usePage } from '@inertiajs/vue3'; // Import usePage
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NavLink from '@/Components/NavLink.vue';
@@ -7,6 +8,9 @@ import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import { Link } from '@inertiajs/vue3';
 import { Bars3Icon, XMarkIcon, UserCircleIcon } from '@heroicons/vue/24/outline';
 import GlobalLoader from '@/Components/GlobalLoader.vue';
+
+const page = usePage();
+const isAdmin = computed(() => page.props.auth.user.role === 'admin');
 
 const showingNavigationDropdown = ref(false);
 </script>
@@ -32,15 +36,14 @@ const showingNavigationDropdown = ref(false);
                                 <p class="text-[10px] text-emerald-600 font-bold tracking-widest uppercase">Admin Console</p>
                             </div>
                         </Link>
-
-                        <div class="hidden space-x-8 sm:-my-px sm:flex h-full items-center">
+                        <template v-if="isAdmin">
                             <NavLink :href="route('admin.kavling.index')" :active="route().current('admin.kavling.*')">
                                 🏙️ Data Kavling
                             </NavLink>
                             <NavLink :href="route('admin.booking.index')" :active="route().current('admin.booking.*')">
                                 📄 Data Transaksi
                             </NavLink>
-                            </div>
+                        </template>
                     </div>
 
                     <div class="hidden sm:flex sm:items-center sm:ms-6">
@@ -99,11 +102,14 @@ const showingNavigationDropdown = ref(false);
                 :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }"
                 class="sm:hidden bg-white border-t border-slate-100"
             >
-                <div class="pt-2 pb-3 space-y-1">
-                    <ResponsiveNavLink :href="route('admin.kavling.index')" :active="route().current('admin.kavling.*')">
-                        Data Kavling
-                    </ResponsiveNavLink>
-                </div>
+            <div class="pt-2 pb-3 space-y-1" v-if="isAdmin">
+                <ResponsiveNavLink :href="route('admin.kavling.index')" :active="route().current('admin.kavling.*')">
+                    Data Kavling
+                </ResponsiveNavLink>
+                <ResponsiveNavLink :href="route('admin.booking.index')" :active="route().current('admin.booking.*')">
+                    Data Transaksi
+                </ResponsiveNavLink>
+            </div>
 
                 <div class="pt-4 pb-1 border-t border-slate-200">
                     <div class="px-4">
