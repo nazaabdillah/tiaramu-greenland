@@ -9,6 +9,8 @@ import {
     PhoneIcon, 
     IdentificationIcon 
 } from '@heroicons/vue/24/solid';
+import Swal from 'sweetalert2';
+import NotificationDropdown from '@/Components/NotificationDropdown.vue'; // <--- Import Notifikasi
 
 // ==========================================
 // 1. DATA & STATE
@@ -17,6 +19,9 @@ const props = defineProps({
     kavlings: Array,
     canLogin: Boolean,
 });
+
+// Ambil data Flash dari Shared Data
+const page = usePage();
 
 const selectedKavling = ref(null);
 const currentSlide = ref(0);
@@ -38,10 +43,42 @@ const formatRupiah = (number) => {
     }).format(number);
 };
 
+// WATCHER: Memantau jika ada pesan masuk dari Backend
+watch(() => page.props.flash, (flash) => {
+    if (flash.popup_type === 'success_payment') {
+        
+        // GUNAKAN TOAST (Notifikasi Kecil di Pojok Kanan Atas)
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 5000, // Hilang sendiri dalam 5 detik
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer)
+                toast.addEventListener('mouseleave', Swal.resumeTimer)
+            }
+        });
+
+        Toast.fire({
+            icon: 'success',
+            title: 'Pembayaran Berhasil!',
+            text: 'Cek lonceng notifikasi untuk download struk & info tagihan.'
+        });
+        
+        // Opsional: Buka otomatis panel kavlingnya lagi biar user tau statusnya berubah
+        if (flash.booking_id) {
+            // Logic tambahan kalau mau auto-select kavling yang baru dibayar (optional)
+        }
+    }
+}, { deep: true, immediate: true });
+
+// Logika Buka/Tutup Panel Kanan
 const togglePanel = () => {
     isPanelOpen.value = !isPanelOpen.value;
 };
 
+// Auto Open Panel kalau pilih kavling
 watch(selectedKavling, (newVal) => {
     if (newVal) {
         isPanelOpen.value = true;
@@ -72,10 +109,10 @@ const submitBooking = () => {
         onSuccess: () => {
             showBookingModal.value = false;
             bookingForm.reset();
-            alert('Mengarahkan ke pembayaran...');
+            // Alert manual dihapus karena sudah dihandle redirect Tripay
         },
         onError: (errors) => {
-            alert('Gagal booking. Cek kelengkapan data.');
+            Swal.fire('Gagal', 'Cek kelengkapan data.', 'error');
         }
     });
 };
@@ -92,6 +129,7 @@ const prevSlide = () => {
     else currentSlide.value--;
 };
 
+// Logika Pewarnaan Peta
 const colorizeMap = () => {
     props.kavlings.forEach(kavling => {
         const element = document.getElementById(kavling.kode_kavling);
@@ -238,17 +276,26 @@ onMounted(() => {
                         <g class="lot-group"> <path id="D1" class="lot" d="m488.12 362.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="464" y="375" class="lot-label">D1</text> </g>
                     </g>
                 </svg>
-            </div>
+                </div>
         </div>
 
         <div class="fixed top-0 left-0 right-0 z-40 p-4 pointer-events-none"> 
             <div class="max-w-7xl mx-auto flex justify-between items-center pointer-events-auto">
+                
                 <div class="bg-white/80 backdrop-blur-xl shadow-2xl rounded-full px-6 py-3 border border-white/40 flex items-center gap-3">
                     <span class="text-3xl drop-shadow-md">🏡</span>
-                    <div><h1 class="font-bold text-emerald-900 leading-none">Tiaramu Greenland</h1><p class="text-[10px] text-emerald-600 font-extrabold tracking-widest uppercase">Premium Estate</p></div>
+                    <div>
+                        <h1 class="font-bold text-emerald-900 leading-none">Tiaramu Greenland</h1>
+                        <p class="text-[10px] text-emerald-600 font-extrabold tracking-widest uppercase">Premium Estate</p>
+                    </div>
                 </div>
-                <div v-if="canLogin">
+
+                <div v-if="canLogin" class="flex items-center gap-3">
                     
+                    <div v-if="$page.props.auth.user" class="bg-white/90 backdrop-blur-xl rounded-full shadow-lg border border-white/50 h-10 w-10 flex items-center justify-center hover:scale-105 transition">
+                        <NotificationDropdown />
+                    </div>
+
                     <div v-if="$page.props.auth.user" class="flex items-center gap-2">
                         <Link :href="route('profile.edit')" class="group flex items-center gap-3 bg-white/90 backdrop-blur-xl pl-2 pr-5 py-2 rounded-full shadow-lg border border-white/50 hover:scale-105 hover:shadow-emerald-200/50 transition-all duration-300">
                             
@@ -260,7 +307,8 @@ onMounted(() => {
                             <div class="text-left leading-tight">
                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-emerald-500 transition">Halo,</p>
                                 <p class="text-sm font-black text-slate-700 group-hover:text-emerald-700 transition">
-                                    {{ $page.props.auth.user.name.split(' ')[0] }} </p>
+                                    {{ $page.props.auth.user.name.split(' ')[0] }} 
+                                </p>
                             </div>
                         </Link>
                     </div>

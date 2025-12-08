@@ -9,11 +9,19 @@ class Booking extends Model
 {
     use HasFactory;
 
-    protected $guarded = []; // Izinkan mass assignment
+    protected $guarded = ['id'];
 
-    // Relasi: Booking ini pesanan untuk Kavling mana?
+    // --- TAMBAHKAN INI ---
+
+    // 1. Relasi ke User (Pembeli)
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    // 2. Relasi ke Kavling (Produk)
     public function kavling()
     {
-        return $this->belongsTo(Kavling::class);
+        return $this->belongsTo(Kavling::class, 'kavling_id');
     }
 }

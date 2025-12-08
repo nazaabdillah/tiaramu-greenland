@@ -10,15 +10,18 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Barryvdh\DomPDF\Facade\Pdf; // <--- Pastikan ini ada
+use App\Notifications\PaymentSuccess;
 
 class BookingController extends Controller
 {
     // 1. STORE: Kirim ke Tripay
+// 1. STORE: Kirim ke Tripay
     public function store(Request $request)
     {
         if (!auth()->check()) {
             return redirect()->route('login')->with('error', 'Silakan login terlebih dahulu.');
         }
+        
         $request->validate([
             'nama_pembeli' => 'required|string|max:255',
             'nomor_wa'     => 'required|string|max:20',
@@ -33,10 +36,11 @@ class BookingController extends Controller
                 return redirect()->back()->withErrors(['msg' => 'Unit sold out!']);
             }
 
+            // Ini Reference buatan Kita (Merchant Ref)
             $merchantRef = 'INV-' . time() . '-' . Str::random(4);
 
             $booking = Booking::create([
-                'user_id'           => auth()->id(), // <--- INI TAMBAHAN PENTING
+                'user_id'           => auth()->id(),
                 'kavling_id'        => $kavling->id,
                 'nama_pembeli'      => $request->nama_pembeli,
                 'nomor_wa'          => $request->nomor_wa,
@@ -49,7 +53,7 @@ class BookingController extends Controller
             $apiKey       = env('TRIPAY_API_KEY');
             $privateKey   = env('TRIPAY_PRIVATE_KEY');
             $merchantCode = env('TRIPAY_MERCHANT_CODE');
-            $bookingFee   = 2000000; 
+            $bookingFee   = 2000000; // Harga DP
 
             $signature = hash_hmac('sha256', $merchantCode . $merchantRef . $bookingFee, $privateKey);
 
@@ -58,7 +62,7 @@ class BookingController extends Controller
                 'merchant_ref'   => $merchantRef,
                 'amount'         => $bookingFee,
                 'customer_name'  => $request->nama_pembeli,
-                'customer_email' => auth()->user()->email, // Pakai email akun asli
+                'customer_email' => auth()->user()->email,
                 'customer_phone' => $request->nomor_wa,
                 'order_items'    => [
                     [
@@ -83,16 +87,22 @@ class BookingController extends Controller
                     throw new \Exception($result['message'] ?? 'Gagal Tripay');
                 }
 
+                // --- BAGIAN INI YANG DIPERBAIKI ---
                 $booking->update([
                     'payment_url' => $result['data']['checkout_url'],
-                    'xendit_id'   => $result['data']['reference']
+                    // JANGAN 'xendit_id', TAPI 'reference' (Sesuai kolom baru kita)
+                    'reference'   => $result['data']['reference'] 
                 ]);
+                // ----------------------------------
+
                 $kavling->update(['status' => 'booking']);
 
                 return Inertia::location($result['data']['checkout_url']);
 
             } catch (\Exception $e) {
-                dd('Error Tripay:', $e->getMessage());
+                // Log error biar tau kenapa gagal
+                \Log::error('Tripay Error: ' . $e->getMessage());
+                return redirect()->back()->withErrors(['msg' => 'Gagal memproses pembayaran: ' . $e->getMessage()]);
             }
         });
     }
@@ -100,38 +110,31 @@ class BookingController extends Controller
     // 2. FINISH: Halaman Sukses
     public function finish(Request $request)
     {
-        $merchantRef = $request->query('merchant_ref');
-        $tripayRef   = $request->query('reference');
+        $reference = $request->query('reference'); 
+        $booking = Booking::where('reference', $reference)->firstOrFail();
+            $sisaHutang = $booking->kavling->harga - 2000000;
 
-        $booking = Booking::with('kavling')
-            ->where('midtrans_booking_id', $merchantRef)
-            ->orWhere('xendit_id', $tripayRef)
-            ->first();
+        $user = auth()->user();
+        $user->notify(new PaymentSuccess($booking, $sisaHutang));
 
-        if (!$booking) {
-            return redirect()->route('home')->with('error', 'Transaksi tidak ditemukan.');
-        }
-
-        if ($booking->status_pembayaran !== 'paid') {
-            $booking->update(['status_pembayaran' => 'paid']);
-            $booking->kavling->update(['status' => 'booking']); // Tetap booking sampai lunas total
-        }
-
-        return Inertia::render('Booking/Success', [
-            'booking' => $booking
-        ]);
+    // Redirect polos aja, biarkan Lonceng yang bekerja
+        return redirect()->route('home');
     }
 
     // 3. PRINT INVOICE: Cetak PDF
     public function printInvoice($id)
     {
-        $booking = Booking::with('kavling')->findOrFail($id);
+        $booking = Booking::with(['user', 'kavling'])->findOrFail($id);
         
         $pdf = Pdf::loadView('pdf.invoice', [
             'booking' => $booking
         ]);
 
-        return $pdf->stream('Invoice-Booking-' . $booking->midtrans_booking_id . '.pdf');
+        // OPSI A: Langsung Download (Nama file: invoice-ID.pdf)
+        return $pdf->download('invoice-'.$booking->id.'.pdf');
+
+        // OPSI B: Preview dulu di browser (Stream)
+        // return $pdf->stream(); 
     }
     // FUNGSI 4: PANCINGAN LOGIN & AUTO OPEN MODAL
     public function initiate($id)
