@@ -18,23 +18,22 @@ class PaymentSuccess extends Notification
         $this->sisaHutang = $sisaHutang;
     }
 
+    // [WAJIB CEK] Pastikan ini isinya 'database'
     public function via(object $notifiable): array
     {
-        return ['database']; // <--- Simpan ke Database, bukan kirim email
+        return ['database']; 
     }
 
-    // Struktur data yang disimpan ke database (JSON)
+    // [WAJIB CEK] Struktur Data
     public function toArray(object $notifiable): array
     {
         return [
             'title' => 'Pembayaran DP Berhasil!',
-            'message' => 'Terima kasih, pembayaran DP untuk Kavling ' . $this->booking->kavling->blok . '-' . $this->booking->kavling->nomor . ' telah diterima.',
-            'amount_paid' => $this->booking->total_price, // atau nominal DP
+            'message' => 'Kavling ' . $this->booking->kavling->kode_kavling . ' aman terkendali.',
             'sisa_hutang' => $this->sisaHutang,
             'booking_id' => $this->booking->id,
             'download_url' => route('booking.invoice', $this->booking->id),
-            'icon' => 'check-circle', // Buat variasi icon di frontend
-            'color' => 'text-green-500'
+            'type' => 'success', // Tambahan buat styling
         ];
     }
 }

@@ -109,10 +109,21 @@ const submitBooking = () => {
         onSuccess: () => {
             showBookingModal.value = false;
             bookingForm.reset();
-            // Alert manual dihapus karena sudah dihandle redirect Tripay
+            // Alert dihapus karena akan dihandle redirect Tripay
         },
         onError: (errors) => {
-            Swal.fire('Gagal', 'Cek kelengkapan data.', 'error');
+            // --- DEBUGGING MODE: BUKA TOPENG ERRORNYA ---
+            console.log("Error dari Backend:", errors); // Cek Console Browser (F12)
+            
+            // Ambil pesan error pertama yang dikirim Laravel
+            const firstError = Object.values(errors)[0];
+            
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal Booking',
+                text: firstError || 'Terjadi kesalahan validasi data.',
+                footer: 'Cek Console (F12) untuk detail.'
+            });
         }
     });
 };
