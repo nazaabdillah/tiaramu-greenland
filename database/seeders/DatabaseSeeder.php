@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Database\Seeders\GallerySeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -17,9 +18,19 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        $user = \App\Models\User::where('email', 'test@example.com')->first();
+
+        if (!$user) {
+            \App\Models\User::factory()->create([
+                'name' => 'Test User',
+                'email' => 'test@example.com',
+                'role' => 'admin'
+            ]);
+        }
+        $this->call([
+        KavlingSeeder::class, // <-- Pastikan nama class-nya benar
+        GallerySeeder::class,  // <-- Ini juga
+        // TransactionSeeder::class, (kalau ada)
         ]);
     }
 }

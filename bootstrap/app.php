@@ -11,14 +11,19 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->web(append: [
-            \App\Http\Middleware\HandleInertiaRequests::class,
-            \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+        
+        // 1. DAFTARKAN SEBAGAI ALIAS (Biar cuma aktif kalau dipanggil)
+        $middleware->alias([
             'admin' => \App\Http\Middleware\AdminOnly::class,
         ]);
 
-        //
+        // 2. WEB GROUP (Yang jalan di semua halaman)
+        $middleware->web(append: [
+            \App\Http\Middleware\HandleInertiaRequests::class,
+            \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+            // HAPUS BARIS 'admin' DARI SINI !!!
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })->create();
+    })->create(); 
