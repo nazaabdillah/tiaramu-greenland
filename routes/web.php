@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Route;
 // Halaman Utama (Peta)
 Route::get('/', [HomeController::class, 'index'])->name('home');
 
+Route::get('/booking/finish', [BookingController::class, 'finish'])->name('booking.finish');
+Route::get('/booking/invoice/{id}', [BookingController::class, 'printInvoice'])->name('booking.invoice');
 // Login Google
 Route::get('/auth/google', [SocialiteController::class, 'redirect'])->name('google.login');
 Route::get('/auth/google/callback', [SocialiteController::class, 'callback']);
@@ -44,8 +46,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --- FITUR BOOKING ---
     // User biasa hanya bisa akses ini kalau sudah login
     Route::post('/booking', [BookingController::class, 'store'])->name('booking.store');
-    Route::get('/booking/finish', [BookingController::class, 'finish'])->name('booking.finish');
-    Route::get('/booking/invoice/{id}', [BookingController::class, 'printInvoice'])->name('booking.invoice');
     
     // Pancingan Logic
     Route::get('/booking/initiate/{id}', [BookingController::class, 'initiate'])->name('booking.initiate');

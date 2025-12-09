@@ -2,15 +2,17 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ref, onMounted, watch } from 'vue';
 import { 
+    ChevronUpIcon,    
+    ChevronDownIcon,  
+    ChevronLeftIcon,  
     ChevronRightIcon, 
-    ChevronLeftIcon, 
     XMarkIcon, 
     UserIcon, 
     PhoneIcon, 
     IdentificationIcon 
 } from '@heroicons/vue/24/solid';
 import Swal from 'sweetalert2';
-import NotificationDropdown from '@/Components/NotificationDropdown.vue'; // <--- Import Notifikasi
+import NotificationDropdown from '@/Components/NotificationDropdown.vue';
 
 // ==========================================
 // 1. DATA & STATE
@@ -20,12 +22,10 @@ const props = defineProps({
     canLogin: Boolean,
 });
 
-// Ambil data Flash dari Shared Data
 const page = usePage();
-
 const selectedKavling = ref(null);
 const currentSlide = ref(0);
-const isPanelOpen = ref(true);
+const isPanelOpen = ref(false); 
 const showBookingModal = ref(false);
 
 const bookingForm = useForm({
@@ -43,16 +43,19 @@ const formatRupiah = (number) => {
     }).format(number);
 };
 
-// WATCHER: Memantau jika ada pesan masuk dari Backend
+// ==========================================
+// 2. LOGIC NOTIFIKASI & FEEDBACK
+// ==========================================
 watch(() => page.props.flash, (flash) => {
+    // Debugging: Cek apakah sinyal masuk
+    console.log("Flash Message Diterima:", flash); 
+
     if (flash.popup_type === 'success_payment') {
-        
-        // GUNAKAN TOAST (Notifikasi Kecil di Pojok Kanan Atas)
         const Toast = Swal.mixin({
             toast: true,
             position: 'top-end',
             showConfirmButton: false,
-            timer: 5000, // Hilang sendiri dalam 5 detik
+            timer: 6000,
             timerProgressBar: true,
             didOpen: (toast) => {
                 toast.addEventListener('mouseenter', Swal.stopTimer)
@@ -63,22 +66,25 @@ watch(() => page.props.flash, (flash) => {
         Toast.fire({
             icon: 'success',
             title: 'Pembayaran Berhasil!',
-            text: 'Cek lonceng notifikasi untuk download struk & info tagihan.'
+            text: 'Cek lonceng notifikasi untuk download struk.'
         });
-        
-        // Opsional: Buka otomatis panel kavlingnya lagi biar user tau statusnya berubah
-        if (flash.booking_id) {
-            // Logic tambahan kalau mau auto-select kavling yang baru dibayar (optional)
-        }
     }
 }, { deep: true, immediate: true });
 
-// Logika Buka/Tutup Panel Kanan
+// ==========================================
+// 3. LOGIC INTERAKSI UI
+// ==========================================
 const togglePanel = () => {
     isPanelOpen.value = !isPanelOpen.value;
 };
 
-// Auto Open Panel kalau pilih kavling
+const closeDetail = () => {
+    isPanelOpen.value = false; 
+    setTimeout(() => {
+        selectedKavling.value = null; 
+    }, 500); 
+};
+
 watch(selectedKavling, (newVal) => {
     if (newVal) {
         isPanelOpen.value = true;
@@ -90,9 +96,16 @@ const openBookingModal = () => {
     const user = usePage().props.auth.user;
     
     if (!user) {
-        if(confirm('Silakan Login untuk melakukan Booking.')) {
-             window.location.href = route('login');
-        }
+        Swal.fire({
+            title: 'Login Diperlukan',
+            text: 'Silakan login terlebih dahulu untuk memesan unit.',
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonText: 'Login Sekarang',
+            cancelButtonText: 'Batal'
+        }).then((result) => {
+            if (result.isConfirmed) window.location.href = route('login');
+        });
         return;
     }
 
@@ -109,20 +122,13 @@ const submitBooking = () => {
         onSuccess: () => {
             showBookingModal.value = false;
             bookingForm.reset();
-            // Alert dihapus karena akan dihandle redirect Tripay
         },
         onError: (errors) => {
-            // --- DEBUGGING MODE: BUKA TOPENG ERRORNYA ---
-            console.log("Error dari Backend:", errors); // Cek Console Browser (F12)
-            
-            // Ambil pesan error pertama yang dikirim Laravel
             const firstError = Object.values(errors)[0];
-            
             Swal.fire({
                 icon: 'error',
                 title: 'Gagal Booking',
-                text: firstError || 'Terjadi kesalahan validasi data.',
-                footer: 'Cek Console (F12) untuk detail.'
+                text: firstError || 'Cek kelengkapan data.',
             });
         }
     });
@@ -140,7 +146,6 @@ const prevSlide = () => {
     else currentSlide.value--;
 };
 
-// Logika Pewarnaan Peta
 const colorizeMap = () => {
     props.kavlings.forEach(kavling => {
         const element = document.getElementById(kavling.kode_kavling);
@@ -240,13 +245,11 @@ onMounted(() => {
                              <path d="M315 50 L290 240 L440 250" /> <path d="M460 90 L445 250" /> <path d="M435 270 L425 380" />
                         </g>
                     </g>
-
                     <g class="trees" fill="url(#treeGradient)" filter="url(#houseShadow)">
                         <circle cx="280" cy="80" r="18" /> <circle cx="270" cy="100" r="14" /> <circle cx="530" cy="200" r="22" /> <circle cx="550" cy="220" r="16" /> <circle cx="540" cy="300" r="18" /> <circle cx="350" cy="30" r="16" /> <circle cx="410" cy="220" r="12" />
                     </g>
 
                     <g class="lots-layer" filter="url(#houseShadow)" stroke="#ffffff" stroke-width="2" stroke-linejoin="round">
-                        
                         <g class="lot-group"> <path id="A7" class="lot" d="m306.12 49.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="280" y="62" class="lot-label">A7</text> </g>
                         <g class="lot-group"> <path id="A6" class="lot" d="m304.12 76.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="278" y="89" class="lot-label">A6</text> </g>
                         <g class="lot-group"> <path id="A5" class="lot" d="m300.12 102.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="274" y="115" class="lot-label">A5</text> </g>
@@ -287,10 +290,10 @@ onMounted(() => {
                         <g class="lot-group"> <path id="D1" class="lot" d="m488.12 362.32l-2.45 25.88-47.79-4.52 2.45-25.88z"/> <text x="464" y="375" class="lot-label">D1</text> </g>
                     </g>
                 </svg>
-                </div>
+            </div>
         </div>
 
-        <div class="fixed top-0 left-0 right-0 z-40 p-4 pointer-events-none"> 
+        <div class="fixed top-0 left-0 right-0 z-50 p-4 pointer-events-none"> 
             <div class="max-w-7xl mx-auto flex justify-between items-center pointer-events-auto">
                 
                 <div class="bg-white/80 backdrop-blur-xl shadow-2xl rounded-full px-6 py-3 border border-white/40 flex items-center gap-3">
@@ -309,12 +312,10 @@ onMounted(() => {
 
                     <div v-if="$page.props.auth.user" class="flex items-center gap-2">
                         <Link :href="route('profile.edit')" class="group flex items-center gap-3 bg-white/90 backdrop-blur-xl pl-2 pr-5 py-2 rounded-full shadow-lg border border-white/50 hover:scale-105 hover:shadow-emerald-200/50 transition-all duration-300">
-                            
                             <img 
                                 :src="$page.props.auth.user.avatar || 'https://ui-avatars.com/api/?background=10b981&color=fff&name=' + $page.props.auth.user.name" 
                                 class="w-10 h-10 rounded-full border-2 border-emerald-100 shadow-sm object-cover"
                             />
-                            
                             <div class="text-left leading-tight">
                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-emerald-500 transition">Halo,</p>
                                 <p class="text-sm font-black text-slate-700 group-hover:text-emerald-700 transition">
@@ -333,39 +334,91 @@ onMounted(() => {
             </div>
         </div>
 
-        <div class="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] bg-white/90 backdrop-blur-2xl shadow-2xl border-l border-white/20 transform transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) flex flex-col" :class="isPanelOpen ? 'translate-x-0' : 'translate-x-full'">
-            <button @click="togglePanel" class="absolute top-1/2 -left-12 -translate-y-1/2 bg-white text-emerald-700 p-3 rounded-l-2xl shadow-xl hover:bg-gray-50 transition border border-r-0 border-gray-100 flex items-center justify-center group">
-                <ChevronRightIcon v-if="isPanelOpen" class="w-6 h-6"/><ChevronLeftIcon v-else class="w-6 h-6"/>
-            </button>
-            <div class="flex-1 overflow-y-auto h-full relative">
-                <div class="relative h-80 bg-slate-200">
+        <div 
+            class="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1)"
+            :class="isPanelOpen ? 'translate-y-0' : 'translate-y-[90%]'"
+        >
+            <div class="w-full max-w-5xl bg-white/95 backdrop-blur-xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.2)] border-t border-white/50 rounded-t-[2.5rem] pointer-events-auto flex flex-col md:flex-row overflow-hidden max-h-[85vh] md:h-[400px] relative">
+                
+                <button 
+                    @click="togglePanel" 
+                    class="absolute -top-10 left-1/2 -translate-x-1/2 bg-white text-emerald-700 h-10 w-16 rounded-t-xl shadow-[0_-5px_10px_rgba(0,0,0,0.05)] flex items-center justify-center hover:bg-emerald-50 transition cursor-pointer pointer-events-auto"
+                >
+                    <ChevronDownIcon v-if="isPanelOpen" class="w-6 h-6 animate-bounce-slow"/>
+                    <ChevronUpIcon v-else class="w-6 h-6 animate-bounce-slow"/>
+                </button>
+
+                <div class="w-full md:w-5/12 h-64 md:h-full relative bg-slate-200 shrink-0">
                     <div v-if="selectedKavling && selectedKavling.galleries?.length > 0" class="h-full w-full relative group">
-                        <img :src="selectedKavling.galleries[currentSlide].image_path" class="w-full h-full object-cover">
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                        <div class="absolute bottom-6 right-6 flex gap-2">
-                             <button v-if="selectedKavling.galleries.length > 1" @click="prevSlide" class="bg-white/20 backdrop-blur-md hover:bg-emerald-500 text-white p-3 rounded-full transition border border-white/10"><ChevronLeftIcon class="w-5 h-5"/></button>
-                             <button v-if="selectedKavling.galleries.length > 1" @click="nextSlide" class="bg-white/20 backdrop-blur-md hover:bg-emerald-500 text-white p-3 rounded-full transition border border-white/10"><ChevronRightIcon class="w-5 h-5"/></button>
+                        <img :src="selectedKavling.galleries[currentSlide].image_path" class="w-full h-full object-cover transition-transform duration-700 hover:scale-110">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                        <div class="absolute bottom-4 right-4 flex gap-2">
+                             <button v-if="selectedKavling.galleries.length > 1" @click="prevSlide" class="bg-white/20 backdrop-blur-md hover:bg-emerald-500 text-white p-2 rounded-full transition border border-white/10"><ChevronLeftIcon class="w-4 h-4"/></button>
+                             <button v-if="selectedKavling.galleries.length > 1" @click="nextSlide" class="bg-white/20 backdrop-blur-md hover:bg-emerald-500 text-white p-2 rounded-full transition border border-white/10"><ChevronRightIcon class="w-4 h-4"/></button>
                         </div>
-                        <div class="absolute bottom-6 left-6 flex gap-1.5"><span v-for="(f, i) in selectedKavling.galleries" :key="i" class="h-1.5 rounded-full transition-all duration-300" :class="currentSlide === i ? 'bg-white w-8' : 'bg-white/30 w-2'"></span></div>
+                        <div class="absolute bottom-4 left-4 flex gap-1.5">
+                            <span v-for="(f, i) in selectedKavling.galleries" :key="i" class="h-1 rounded-full transition-all duration-300 shadow-sm" :class="currentSlide === i ? 'bg-white w-6' : 'bg-white/40 w-1.5'"></span>
+                        </div>
                     </div>
-                    <div v-else class="h-full flex flex-col items-center justify-center text-slate-400 bg-slate-100"><span class="text-7xl mb-4 grayscale opacity-30">🗺️</span><p class="text-sm font-bold uppercase tracking-widest opacity-60">Pilih Unit</p></div>
+                    <div v-else class="h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50 border-r border-slate-100">
+                        <span class="text-6xl mb-2 grayscale opacity-20">🏡</span>
+                        <p class="text-xs font-bold uppercase tracking-widest opacity-50">Pilih Unit di Peta</p>
+                    </div>
                 </div>
-                <div class="p-8">
+
+                <div class="flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar">
                     <div v-if="selectedKavling" class="animate-fade-in-up">
-                        <div class="flex justify-between items-start mb-8">
-                            <div><h2 class="text-6xl font-black text-slate-800 tracking-tighter">{{ selectedKavling.kode_kavling }}</h2><p class="text-emerald-600 font-bold text-xl mt-1">Tipe {{ selectedKavling.tipe_rumah }}</p></div>
-                            <span class="px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-sm border-2" :class="{'bg-emerald-50 text-emerald-700 border-emerald-100': selectedKavling.status === 'available', 'bg-red-50 text-red-700 border-red-100': selectedKavling.status === 'sold', 'bg-amber-50 text-amber-700 border-amber-100': selectedKavling.status === 'booking'}">{{ selectedKavling.status }}</span>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4 mb-8">
-                            <div class="bg-white p-6 rounded-3xl border border-slate-100 text-center hover:border-emerald-300 hover:shadow-xl hover:shadow-emerald-100/50 transition group cursor-default"><span class="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 group-hover:text-emerald-500 transition">Luas Tanah</span><span class="text-3xl font-black text-slate-700">{{ selectedKavling.luas_tanah }} <span class="text-sm font-bold text-slate-400">m²</span></span></div>
-                            <div class="bg-white p-6 rounded-3xl border border-slate-100 text-center hover:border-emerald-300 hover:shadow-xl hover:shadow-emerald-100/50 transition group cursor-default"><span class="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 group-hover:text-emerald-500 transition">Luas Bangunan</span><span class="text-3xl font-black text-slate-700">{{ selectedKavling.luas_bangunan }} <span class="text-sm font-bold text-slate-400">m²</span></span></div>
-                        </div>
-                        <div class="mb-8 p-8 bg-gradient-to-br from-emerald-50 to-white rounded-3xl border border-emerald-100 relative overflow-hidden"><div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-emerald-100 rounded-full blur-2xl opacity-50"></div><span class="block text-emerald-600/80 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">Harga Cash Keras</span><div class="text-4xl font-black text-emerald-800 relative z-10 tracking-tight">{{ formatRupiah(selectedKavling.harga) }}</div></div>
                         
-                        <button v-if="selectedKavling.status === 'available'" @click="openBookingModal" class="w-full py-5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-lg shadow-2xl shadow-emerald-300/50 transition transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3"><span>💎</span> Booking Unit Sekarang</button>
-                        <button v-else disabled class="w-full py-5 bg-slate-100 text-slate-400 rounded-2xl font-bold text-lg cursor-not-allowed border-2 border-slate-200">🔒 Unit Tidak Tersedia</button>
+                        <div class="flex justify-between items-start mb-6 border-b border-slate-100 pb-4">
+                            <div>
+                                <h2 class="text-4xl md:text-5xl font-black text-slate-800 tracking-tighter">{{ selectedKavling.kode_kavling }}</h2>
+                                <p class="text-emerald-600 font-bold text-sm mt-1 uppercase tracking-wide">Tipe {{ selectedKavling.tipe_rumah }}</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="inline-block px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-sm border" 
+                                    :class="{
+                                        'bg-emerald-50 text-emerald-600 border-emerald-100': selectedKavling.status === 'available', 
+                                        'bg-red-50 text-red-600 border-red-100': selectedKavling.status === 'sold', 
+                                        'bg-amber-50 text-amber-600 border-amber-100': selectedKavling.status === 'booking'
+                                    }">
+                                    {{ selectedKavling.status }}
+                                </span>
+                                <button @click="closeDetail" class="p-2 rounded-full bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition shadow-sm">
+                                    <XMarkIcon class="w-5 h-5"/>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 mb-6">
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center justify-center hover:bg-white hover:shadow-md transition group">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Luas Tanah</span>
+                                <span class="text-xl font-black text-slate-700 group-hover:text-emerald-600 transition">{{ selectedKavling.luas_tanah }} <span class="text-xs text-slate-400">m²</span></span>
+                            </div>
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center justify-center hover:bg-white hover:shadow-md transition group">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Luas Bangunan</span>
+                                <span class="text-xl font-black text-slate-700 group-hover:text-emerald-600 transition">{{ selectedKavling.luas_bangunan }} <span class="text-xs text-slate-400">m²</span></span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col md:flex-row items-center gap-4">
+                            <div class="flex-1 w-full">
+                                <span class="block text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Harga Cash Keras</span>
+                                <div class="text-3xl font-black text-emerald-700 tracking-tight">{{ formatRupiah(selectedKavling.harga) }}</div>
+                            </div>
+                            
+                            <div class="w-full md:w-auto">
+                                <button v-if="selectedKavling.status === 'available'" @click="openBookingModal" class="w-full md:w-auto px-8 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-200 transition transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap">
+                                    <span>💎</span> Booking Sekarang
+                                </button>
+                                <button v-else disabled class="w-full md:w-auto px-8 py-4 bg-slate-100 text-slate-400 rounded-xl font-bold text-sm cursor-not-allowed border-2 border-slate-200 whitespace-nowrap">
+                                    🔒 Tidak Tersedia
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div v-else class="text-center py-24 opacity-30"><p class="text-xl font-bold text-slate-400">Pilih unit pada peta.</p></div>
+                    <div v-else class="h-full flex items-center justify-center opacity-30 text-center">
+                        <p class="text-lg font-bold text-slate-400">Silakan pilih unit pada peta<br>untuk melihat detail.</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -405,6 +458,7 @@ onMounted(() => {
 </template>
 
 <style>
+/* CSS Tambahan sama seperti sebelumnya */
 .bg-premium-dots { background-color: #f1f5f9; background-image: radial-gradient(#94a3b8 1px, transparent 1px); background-size: 30px 30px; }
 .lot { fill: url(#roofAvailable); transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); cursor: pointer; }
 .lot-label { font-family: sans-serif; font-size: 10px; font-weight: 900; fill: #000000; stroke: none !important; text-anchor: middle; dominant-baseline: middle; pointer-events: none; opacity: 1; }
@@ -419,4 +473,11 @@ onMounted(() => {
 .cloud-move-1 { animation: floatCloud1 60s linear infinite; }
 @keyframes floatCloud2 { 0% { transform: translateX(0px); } 100% { transform: translateX(100vw); } }
 .cloud-move-2 { animation: floatCloud2 80s linear infinite; animation-delay: -20s; }
+
+/* Animasi Tombol Handle */
+@keyframes bounce-slow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.animate-bounce-slow { animation: bounce-slow 2s infinite; }
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 </style>
