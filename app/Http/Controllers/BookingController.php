@@ -13,7 +13,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class BookingController extends Controller
 {
-    // 1. STORE: Kirim ke Tripay (DITAMBAH LOGIKA SESSION)
+    // 1. STORE: Logic Booking Fee 2 Juta + Safety Session
     public function store(Request $request)
     {
         if (!auth()->check()) {
@@ -28,15 +28,19 @@ class BookingController extends Controller
         ]);
 
         return DB::transaction(function () use ($request) {
+            
+            // A. Kunci Kavling
             $kavling = Kavling::lockForUpdate()->find($request->kavling_id);
             
             if ($kavling->status !== 'available') {
                 return redirect()->back()->withErrors(['msg' => 'Unit sold out!']);
             }
 
+            // B. Setup Variabel Transaksi
             $merchantRef = 'INV-' . time() . '-' . Str::random(4);
-            $bookingFee  = 2000000;
+            $bookingFee  = 2000000; 
 
+            // C. Simpan Data Booking
             $booking = Booking::create([
                 'user_id'           => auth()->id(),
                 'kavling_id'        => $kavling->id,
@@ -44,15 +48,19 @@ class BookingController extends Controller
                 'nomor_wa'          => $request->nomor_wa,
                 'nik_ktp'           => $request->nik_ktp,
                 'total_harga'       => $kavling->harga,
+                'nominal_bayar'     => 0,
                 'status_pembayaran' => 'unpaid',
+                'jenis_pembayaran'  => 'booking_fee',
                 'midtrans_booking_id' => $merchantRef, 
             ]);
 
+            // D. Siapkan Signature Tripay
             $apiKey       = env('TRIPAY_API_KEY');
             $privateKey   = env('TRIPAY_PRIVATE_KEY');
             $merchantCode = env('TRIPAY_MERCHANT_CODE');
-            $signature = hash_hmac('sha256', $merchantCode . $merchantRef . $bookingFee, $privateKey);
+            $signature    = hash_hmac('sha256', $merchantCode . $merchantRef . $bookingFee, $privateKey);
 
+            // E. Request ke Tripay
             $data = [
                 'method'         => 'QRIS',
                 'merchant_ref'   => $merchantRef,
@@ -60,104 +68,107 @@ class BookingController extends Controller
                 'customer_name'  => $request->nama_pembeli,
                 'customer_email' => auth()->user()->email,
                 'customer_phone' => $request->nomor_wa,
-                'order_items'    => [['sku'=>$kavling->kode_kavling, 'name'=>'DP '.$kavling->kode_kavling, 'price'=>$bookingFee, 'quantity'=>1]],
+                'order_items'    => [
+                    [
+                        'sku'      => $kavling->kode_kavling, 
+                        'name'     => 'Booking Fee Kavling ' . $kavling->kode_kavling,
+                        'price'    => $bookingFee, 
+                        'quantity' => 1
+                    ]
+                ],
                 'return_url'   => route('booking.finish'), 
                 'expired_time' => (time() + (24 * 60 * 60)),
                 'signature'    => $signature
             ];
 
             try {
+                // F. Tembak API Tripay
                 $response = Http::withHeaders(['Authorization' => 'Bearer ' . $apiKey])
                     ->post('https://tripay.co.id/api-sandbox/transaction/create', $data);
                 
                 $result = $response->json();
 
                 if (!$response->successful() || ($result['success'] ?? false) === false) {
-                    throw new \Exception($result['message'] ?? 'Gagal Tripay');
+                    throw new \Exception($result['message'] ?? 'Gagal koneksi ke Tripay');
                 }
 
                 $reference = $result['data']['reference'];
 
+                // G. Update Database
                 $booking->update([
                     'payment_url' => $result['data']['checkout_url'],
                     'reference'   => $reference 
                 ]);
                 
+                // H. Update Status Kavling
                 $kavling->update(['status' => 'booking']);
 
-                // [JURUS JARING PENGAMAN]
-                // Simpan Reference di Session browser user sebelum dilempar pergi
-                // Jadi kalau Tripay lupa bawa balik, kita masih punya cadangannya.
+                // [JURUS JARING PENGAMAN SESSION]
                 session(['tripay_reference' => $reference]);
 
+                // I. Lempar User ke Halaman Bayar
                 return Inertia::location($result['data']['checkout_url']);
 
             } catch (\Exception $e) {
-                return redirect()->back()->withErrors(['msg' => 'Gagal: ' . $e->getMessage()]);
+                return redirect()->back()->withErrors(['msg' => 'Gagal memproses pembayaran: ' . $e->getMessage()]);
             }
         });
     }
 
-    // 2. FINISH: (DITAMBAH PENGECEKAN SESSION)
+    // 2. FINISH: Menangani Callback/Redirect User setelah Bayar
     public function finish(Request $request)
     {
-        // Coba ambil dari URL (Cara Normal)
+        // Ambil Ref dari URL atau Session
         $reference = $request->query('reference'); 
-        
-        // [JURUS JARING PENGAMAN]
-        // Kalau di URL kosong, Cek di Saku (Session) user
         if (!$reference) {
             $reference = session('tripay_reference');
         }
 
-        // Kalau di saku juga kosong, baru nyerah
         if (!$reference) {
-            return redirect()->route('home')->with('error', 'Kehilangan jejak transaksi.');
+            return redirect()->route('home')->with('error', 'Kehilangan jejak transaksi. Cek riwayat pesanan.');
         }
 
-        // Hapus session biar bersih (One time use)
+        // HAPUS SESSION (Ini kunci biar gak duplikat insert notif)
         session()->forget('tripay_reference');
 
         $booking = Booking::with(['user', 'kavling'])->where('reference', $reference)->firstOrFail();
         
+        // UPDATE STATUS BAYAR
         if ($booking->status_pembayaran === 'unpaid') {
-            $booking->update(['status_pembayaran' => 'paid']);
+            $booking->update([
+                'status_pembayaran' => 'paid',
+                'nominal_bayar'     => 2000000
+            ]);
         }
 
-        $sisaHutang = $booking->kavling->harga - 2000000;
+        $sisaHutang = $booking->total_harga - $booking->nominal_bayar;
 
-        // INSERT NOTIF MANUAL
+        // INSERT NOTIF MANUAL (FIX: Hapus logic cek duplikat yang bikin bug)
         if ($booking->user) {
             try {
-                $exists = DB::table('notifications')
-                    ->where('notifiable_id', $booking->user->id)
-                    ->where('data', 'like', '%'.$booking->id.'%')
-                    ->exists();
-
-                if (!$exists) {
-                    DB::table('notifications')->insert([
-                        'id' => Str::uuid()->toString(),
-                        'type' => 'App\Notifications\PaymentSuccess',
-                        'notifiable_type' => 'App\Models\User',
-                        'notifiable_id' => $booking->user->id,
-                        'data' => json_encode([
-                            'title' => 'Pembayaran DP Berhasil!',
-                            'message' => 'Kavling ' . $booking->kavling->kode_kavling . ' berhasil diamankan.',
-                            'sisa_hutang' => $sisaHutang,
-                            'booking_id' => $booking->id,
-                            'download_url' => route('booking.invoice', $booking->id), 
-                            'type' => 'success'
-                        ]),
-                        'read_at' => null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
+                DB::table('notifications')->insert([
+                    'id' => Str::uuid()->toString(),
+                    'type' => 'App\Notifications\PaymentSuccess',
+                    'notifiable_type' => 'App\Models\User',
+                    'notifiable_id' => $booking->user->id,
+                    'data' => json_encode([
+                        'title' => 'Booking Fee Diterima! ✅',
+                        'message' => 'Kavling ' . $booking->kavling->kode_kavling . ' resmi dibooking.',
+                        'sisa_hutang' => $sisaHutang,
+                        'booking_id' => $booking->id,
+                        'download_url' => route('booking.invoice', $booking->id), 
+                        'type' => 'success'
+                    ]),
+                    'read_at' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
             } catch (\Exception $e) {
                 \Log::error("Gagal Insert Notif: " . $e->getMessage());
             }
         }
 
+        // Redirect ke Home
         return redirect()->route('home')->with([
             'popup_type'  => 'success_payment',
             'booking_id'  => $booking->id,
@@ -166,7 +177,7 @@ class BookingController extends Controller
         ]);
     }
 
-    // 3. PRINT INVOICE (TETAP)
+    // 3. PRINT INVOICE
     public function printInvoice($id)
     {
         if (!auth()->check()) return redirect()->route('login');

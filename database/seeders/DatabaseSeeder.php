@@ -30,6 +30,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
         KavlingSeeder::class, // <-- Pastikan nama class-nya benar
         GallerySeeder::class,  // <-- Ini juga
+        // PaymentMethodSeeder::class,
         // TransactionSeeder::class, (kalau ada)
         ]);
     }
